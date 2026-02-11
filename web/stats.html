@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avito Tiger - Детальная статистика</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.0/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
+    <style>
+        /* Дополнительные стили для страницы статистики */
+        .stats-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stats-header h1 {
+            color: white;
+            -webkit-text-fill-color: white;
+            margin-bottom: 10px;
+        }
+        
+        .stats-header .last-update {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        
+        .filter-panel {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .filter-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .filter-button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            height: 48px;
+        }
+        
+        .filter-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+        }
+        
+        .detailed-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .detailed-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.02);
+        }
+        
+        .detailed-card h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f7fafc;
+            font-size: 1.2em;
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #f7fafc;
+        }
+        
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+        
+        .stat-label {
+            color: #666;
+        }
+        
+        .stat-value {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .trend-up {
+            color: #48bb78;
+        }
+        
+        .trend-down {
+            color: #fc8181;
+        }
+        
+        .queries-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .queries-table th {
+            text-align: left;
+            padding: 12px 15px;
+            background: #f7fafc;
+            color: #666;
+            font-weight: 600;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .queries-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f7fafc;
+        }
+        
+        .queries-table tr:hover td {
+            background: #f7fafc;
+        }
+        
+        .price-history {
+            margin-top: 30px;
+        }
+        
+        .time-range {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .time-btn {
+            padding: 8px 16px;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .time-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+        
+        .export-btn {
+            padding: 10px 20px;
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .export-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .filter-panel {
+                flex-direction: column;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
+            
+            .filter-button {
+                width: 100%;
+            }
+            
+            .detailed-stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Хедер -->
+        <header class="stats-header">
+            <h1>📊 Детальная статистика Avito</h1>
+            <div class="last-update" id="lastUpdate">
+                Загрузка данных...
+            </div>
+        </header>
+
+        <!-- Панель фильтров -->
+        <div class="filter-panel">
+            <div class="filter-group">
+                <label>📅 Период</label>
+                <select id="periodSelect">
+                    <option value="day">Последние 24 часа</option>
+                    <option value="week" selected>Последние 7 дней</option>
+                    <option value="month">Последние 30 дней</option>
+                    <option value="custom">Произвольный</option>
+                </select>
+            </div>
+            
+            <div class="filter-group" id="customDateRange" style="display: none;">
+                <label>С</label>
+                <input type="date" id="startDate">
+            </div>
+            
+            <div class="filter-group" style="display: none;" id="customDateRangeEnd">
+                <label>По</label>
+                <input type="date" id="endDate">
+            </div>
+            
+            <div class="filter-group">
+                <label>🔍 Категория</label>
+                <select id="categorySelect">
+                    <option value="all">Все категории</option>
+                    <option value="electronics">Электроника</option>
+                    <option value="transport">Транспорт</option>
+                    <option value="realty">Недвижимость</option>
+                    <option value="jobs">Работа</option>
+                    <option value="services">Услуги</option>
+                </select>
+            </div>
+            
+            <button class="filter-button" onclick="applyFilters()">
+                Применить фильтры
+            </button>
+        </div>
+
+        <!-- Детальная статистика -->
+        <div class="detailed-stats-grid">
+            <!-- Общая статистика -->
+            <div class="detailed-card">
+                <h3>📈 Общая статистика</h3>
+                <div class="stat-row">
+                    <span class="stat-label">Всего поисков:</span>
+                    <span class="stat-value" id="totalSearches">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Уникальных запросов:</span>
+                    <span class="stat-value" id="uniqueQueries">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Новых объявлений:</span>
+                    <span class="stat-value" id="totalNewAds">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Средняя цена:</span>
+                    <span class="stat-value" id="averagePrice">0 ₽</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Медианная цена:</span>
+                    <span class="stat-value" id="medianPrice">0 ₽</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Самое дорогое:</span>
+                    <span class="stat-value" id="maxPrice">0 ₽</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Самое дешевое:</span>
+                    <span class="stat-value" id="minPrice">0 ₽</span>
+                </div>
+            </div>
+
+            <!-- Активность -->
+            <div class="detailed-card">
+                <h3>⏱ Активность</h3>
+                <div class="stat-row">
+                    <span class="stat-label">Сегодня:</span>
+                    <span class="stat-value" id="todaySearches">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Вчера:</span>
+                    <span class="stat-value" id="yesterdaySearches">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Эта неделя:</span>
+                    <span class="stat-value" id="weekSearches">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Прошлая неделя:</span>
+                    <span class="stat-value" id="lastWeekSearches">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Пик активности:</span>
+                    <span class="stat-value" id="peakTime">20:00-21:00</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Выходные:</span>
+                    <span class="stat-value" id="weekendActivity">↓ 15%</span>
+                </div>
+            </div>
+
+            <!-- Ценовая аналитика -->
+            <div class="detailed-card">
+                <h3>💰 Ценовая аналитика</h3>
+                <div class="stat-row">
+                    <span class="stat-label">Изменение за день:</span>
+                    <span class="stat-value" id="dailyChange">+2.3% 📈</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Изменение за неделю:</span>
+                    <span class="stat-value" id="weeklyChange">-1.5% 📉</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Изменение за месяц:</span>
+                    <span class="stat-value" id="monthlyChange">+5.7% 📈</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Волатильность:</span>
+                    <span class="stat-value" id="volatility">Средняя</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Индекс Avito:</span>
+                    <span class="stat-value" id="avitoIndex">124.5 ↑</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Графики -->
+        <div class="charts-grid">
+            <div class="chart-card full-width">
+                <h2>📈 Динамика цен (по категориям)</h2>
+                <div class="time-range">
+                    <button class="time-btn active" onclick="changeTimeRange('day')">День</button>
+                    <button class="time-btn" onclick="changeTimeRange('week')">Неделя</button>
+                    <button class="time-btn" onclick="changeTimeRange('month')">Месяц</button>
+                    <button class="time-btn" onclick="changeTimeRange('quarter')">Квартал</button>
+                </div>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="detailedPriceChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Топ запросов -->
+        <div class="chart-card full-width" style="margin-top: 25px;">
+            <h2>🔍 Топ-50 поисковых запросов</h2>
+            <table class="queries-table" id="queriesTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Запрос</th>
+                        <th>Количество</th>
+                        <th>Доля</th>
+                        <th>Ср. цена</th>
+                        <th>Динамика</th>
+                    </tr>
+                </thead>
+                <tbody id="queriesTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px;">
+                            <div class="loading">Загрузка данных...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Кнопки экспорта -->
+        <div class="export-buttons">
+            <button class="export-btn" onclick="exportData('csv')">
+                📥 Экспорт в CSV
+            </button>
+            <button class="export-btn" onclick="exportData('json')">
+                📥 Экспорт в JSON
+            </button>
+            <button class="export-btn" onclick="printReport()">
+                🖨 Печать отчета
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ===================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====================
+        let priceChart = null;
+        let trendsData = {};
+        let pricesData = {};
+        let reportsData = [];
+
+        // ===================== ЗАГРУЗКА ДАННЫХ =====================
+        async function loadData() {
+            try {
+                // Загружаем тренды
+                const trendsResponse = await fetch('../data/trends.json');
+                if (trendsResponse.ok) {
+                    trendsData = await trendsResponse.json();
+                }
+
+                // Загружаем цены
+                const pricesResponse = await fetch('../data/prices.json');
+                if (pricesResponse.ok) {
+                    pricesData = await pricesResponse.json();
+                }
+
+                // Загружаем отчеты
+                const reportsResponse = await fetch('../data/daily_reports/');
+                // В реальности тут нужно получать список файлов
+                
+                updateUI();
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showDemoData();
+            }
+        }
+
+        // ===================== ДЕМО-ДАННЫЕ =====================
+        function showDemoData() {
+            // Показываем демо-статистику для预览
+            document.getElementById('totalSearches').innerHTML = '12,547';
+            document.getElementById('uniqueQueries').innerHTML = '1,234';
+            document.getElementById('totalNewAds').innerHTML = '3,891';
+            document.getElementById('averagePrice').innerHTML = '45,990 ₽';
+            document.getElementById('medianPrice').innerHTML = '32,500 ₽';
+            document.getElementById('maxPrice').innerHTML = '2,500,000 ₽';
+            document.getElementById('minPrice').innerHTML = '500 ₽';
+            document.getElementById('todaySearches').innerHTML = '847';
+            document.getElementById('yesterdaySearches').innerHTML = '912';
+            document.getElementById('weekSearches').innerHTML = '5,234';
+            document.getElementById('lastWeekSearches').innerHTML = '4,987';
+            document.getElementById('dailyChange').innerHTML = '+2.3% 📈';
+            document.getElementById('weeklyChange').innerHTML = '-1.5% 📉';
+            document.getElementById('monthlyChange').innerHTML = '+5.7% 📈';
+            document.getElementById('lastUpdate').innerHTML = '🕐 Последнее обновление: ' + new Date().toLocaleString('ru-RU');
+            
+            // Демо-таблица
+            renderDemoTable();
+            renderDemoChart();
+        }
+
+        function renderDemoTable() {
+            const demoQueries = [
+                ['iphone 13', '1,547', '12.3%', '54,990 ₽', '+2.5% 📈'],
+                ['macbook', '987', '7.8%', '89,990 ₽', '-1.2% 📉'],
+                ['ps5', '876', '6.9%', '45,990 ₽', '+5.3% 📈'],
+                ['велосипед', '654', '5.2%', '15,990 ₽', '-0.8% 📉'],
+                ['диван', '543', '4.3%', '12,990 ₽', '+1.2% 📈'],
+                ['airpods', '432', '3.4%', '8,990 ₽', '-2.1% 📉'],
+                ['велосипед взрослый', '321', '2.5%', '18,990 ₽', '+0.5% 📈'],
+                ['монитор', '298', '2.4%', '16,990 ₽', '-1.8% 📉'],
+                ['клавиатура', '265', '2.1%', '3,990 ₽', '+0.9% 📈'],
+                ['наушники', '234', '1.9%', '4,990 ₽', '-0.3% 📉']
+            ];
+            
+            let html = '';
+            demoQueries.forEach((q, i) => {
+                html += `<tr>
+                    <td>${i + 1}</td>
+                    <td><strong>${q[0]}</strong></td>
+                    <td>${q[1]}</td>
+                    <td>${q[2]}</td>
+                    <td>${q[3]}</td>
+                    <td class="${q[4].includes('📈') ? 'trend-up' : 'trend-down'}">${q[4]}</td>
+                </tr>`;
+            });
+            
+            document.getElementById('queriesTableBody').innerHTML = html;
+        }
+
+        function renderDemoChart() {
+            const ctx = document.getElementById('detailedPriceChart')?.getContext('2d');
+            if (!ctx) return;
+            
+            if (priceChart) priceChart.destroy();
+            
+            const dates = [];
+            for (let i = 0; i < 30; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - (29 - i));
+                dates.push(d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }));
+            }
+            
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        {
+                            label: 'iPhone 13',
+                            data: Array.from({length: 30}, () => 54000 + Math.random() * 2000),
+                            borderColor: '#667eea',
+                            backgroundColor: '#667eea20',
+                            tension: 0.4,
+                            fill: false
+                        },
+                        {
+                            label: 'MacBook',
+                            data: Array.from({length: 30}, () => 89000 + Math.random() * 3000),
+                            borderColor: '#764ba2',
+                            backgroundColor: '#764ba220',
+                            tension: 0.4,
+                            fill: false
+                        },
+                        {
+                            label: 'PS5',
+                            data: Array.from({length: 30}, () => 45000 + Math.random() * 2000),
+                            borderColor: '#48bb78',
+                            backgroundColor: '#48bb7820',
+                            tension: 0.4,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Динамика цен за 30 дней'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString() + ' ₽';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ===================== ОБНОВЛЕНИЕ ИНТЕРФЕЙСА =====================
+        function updateUI() {
+            // Обновляем время
+            document.getElementById('lastUpdate').innerHTML = 
+                '🕐 Последнее обновление: ' + new Date().toLocaleString('ru-RU');
+            
+            // Здесь будет логика обновления реальными данными
+        }
+
+        // ===================== ФИЛЬТРЫ =====================
+        function applyFilters() {
+            const period = document.getElementById('periodSelect').value;
+            const category = document.getElementById('categorySelect').value;
+            
+            console.log('Applying filters:', { period, category });
+            
+            // Перезагружаем графики с новыми фильтрами
+            renderDemoChart();
+        }
+
+        function changeTimeRange(range) {
+            // Убираем активный класс у всех кнопок
+            document.querySelectorAll('.time-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Добавляем активный класс нажатой кнопке
+            event.target.classList.add('active');
+            
+            // Меняем диапазон графика
+            renderDemoChart();
+        }
+
+        // ===================== ЭКСПОРТ =====================
+        function exportData(format) {
+            if (format === 'csv') {
+                let csv = 'Запрос,Количество,Средняя цена,Динамика\n';
+                
+                if (trendsData && Object.keys(trendsData).length > 0) {
+                    Object.entries(trendsData).forEach(([query, count]) => {
+                        csv += `${query},${count},0,0%\n`;
+                    });
+                } else {
+                    // Демо-данные
+                    const demoQueries = [
+                        ['iphone 13', 1547, 54990, '+2.5'],
+                        ['macbook', 987, 89990, '-1.2'],
+                        ['ps5', 876, 45990, '+5.3']
+                    ];
+                    demoQueries.forEach(q => {
+                        csv += `${q[0]},${q[1]},${q[2]},${q[3]}%\n`;
+                    });
+                }
+                
+                // Скачиваем CSV
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `avito_stats_${new Date().toISOString().slice(0,10)}.csv`;
+                link.click();
+            }
+            
+            if (format === 'json') {
+                const data = {
+                    trends: trendsData,
+                    prices: pricesData,
+                    exported_at: new Date().toISOString()
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `avito_stats_${new Date().toISOString().slice(0,10)}.json`;
+                link.click();
+            }
+        }
+
+        function printReport() {
+            window.print();
+        }
+
+        // ===================== ОБРАБОТКА ПОКАЗА ПРОИЗВОЛЬНОГО ПЕРИОДА =====================
+        document.getElementById('periodSelect').addEventListener('change', function() {
+            const customRange = document.getElementById('customDateRange');
+            const customRangeEnd = document.getElementById('customDateRangeEnd');
+            
+            if (this.value === 'custom') {
+                customRange.style.display = 'block';
+                customRangeEnd.style.display = 'block';
+            } else {
+                customRange.style.display = 'none';
+                customRangeEnd.style.display = 'none';
+            }
+        });
+
+        // ===================== ИНИЦИАЛИЗАЦИЯ =====================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            
+            // Устанавливаем даты по умолчанию
+            const today = new Date();
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            
+            document.getElementById('startDate').value = weekAgo.toISOString().slice(0,10);
+            document.getElementById('endDate').value = today.toISOString().slice(0,10);
+        });
+    </script>
+</body>
+</html>

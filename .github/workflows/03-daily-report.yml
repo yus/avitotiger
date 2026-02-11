@@ -1,0 +1,35 @@
+name: 📅 Daily Avito Report
+
+on:
+  schedule:
+    - cron: '0 20 * * *'   # 20:00 UTC = 23:00 MSK каждый день
+  workflow_dispatch:        # Ручной запуск
+
+jobs:
+  daily-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install python-telegram-bot==20.7 aiohttp==3.9.1 beautifulsoup4==4.12.2 fake-useragent==1.4.0 matplotlib numpy pandas
+      
+      - name: Generate daily report
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_IDS: ${{ secrets.TELEGRAM_ADMIN_IDS }}
+        run: python src/daily_report.py
+      
+      - name: Save report to data
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'actions@github.com'
+          git add data/daily_reports/
+          git diff --quiet && git diff --staged --quiet || git commit -m "Add daily report [skip ci]"
+          git push
