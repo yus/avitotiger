@@ -1,0 +1,16 @@
+name: avitotiger
+service:
+  name: bot
+  type: worker
+  git:
+    repository: https://github.com/yus/avitotiger
+    branch: main
+  build_command: pip install -r requirements.txt
+  run_command: python src/bot.py
+  env:
+    - name: TELEGRAM_BOT_TOKEN
+      value: ""
+    - name: TELEGRAM_ADMIN_IDS  
+      value: ""
+    - name: DATABASE_URL
+      value: "sqlite:///./avito_bot.db"
