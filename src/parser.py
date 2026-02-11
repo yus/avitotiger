@@ -25,7 +25,7 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_IDS = list(map(int, os.getenv('TELEGRAM_ADMIN_IDS', '').split(','))) if os.getenv('TELEGRAM_ADMIN_IDS') else []
 
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR = Path(__file__).parent.parent.parent
 DATA_DIR = BASE_DIR / 'data'
 DATA_DIR.mkdir(exist_ok=True)
 

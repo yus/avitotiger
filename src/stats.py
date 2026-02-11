@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from collections import Counter
 import numpy as np
 
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR = Path(__file__).parent.parent.parent
 DATA_DIR = BASE_DIR / 'data'
 WEB_DIR = BASE_DIR / 'web'
 
