@@ -1,0 +1,26 @@
+name: 🔍 Webhook Search Handler
+
+on:
+  repository_dispatch:
+    types: [search_command]
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install python-telegram-bot==20.7 aiohttp==3.9.1 beautifulsoup4==4.12.2 fake-useragent==1.4.0
+      
+      - name: Run search
+        env:
+          QUERY: ${{ github.event.client_payload.query }}
+          CHAT_ID: ${{ github.event.client_payload.chat_id }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python src/webhook_search.py

@@ -1,0 +1,30 @@
+name: 📊 Avito Statistics (hourly)
+
+on:
+  schedule:
+    - cron: '0 * * * *'     # Каждый час
+  workflow_dispatch:
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - run: pip install -r requirements.txt matplotlib numpy pandas
+      
+      - name: Generate statistics
+        run: python src/stats.py
+      
+      - name: Generate diagrams
+        run: python src/diagrams.py
+      
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./web
+          keep_files: true
