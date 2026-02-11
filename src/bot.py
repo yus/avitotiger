@@ -1,35 +1,27 @@
 #!/usr/bin/env python3
 """
-Avito Tiger Bot - Telegram интерфейс
-Запускается через GitHub Actions webhook
+Avito Tiger Bot
 """
 
 import os
 import sys
-import json
 import asyncio
 from pathlib import Path
-from datetime import datetime
-import base64
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.error import TelegramError
 import aiohttp
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-ADMIN_IDS = list(map(int, os.getenv('TELEGRAM_ADMIN_IDS', '').split(','))) if os.getenv('TELEGRAM_ADMIN_IDS') else []
 
 # ===================== ПАРСЕР =====================
 
 class AvitoParser:
-    """Быстрый парсер Avito"""
-    
-    BASE_URL = "https://www.avito.ru"
-    
     def __init__(self):
         self.ua = UserAgent()
     
@@ -38,187 +30,157 @@ class AvitoParser:
             headers = {'User-Agent': self.ua.random}
             params = {'q': query}
             
-            async with session.get(f"{self.BASE_URL}/rossiya", params=params, headers=headers) as resp:
-                if resp.status != 200:
-                    return []
-                
-                html = await resp.text()
-                soup = BeautifulSoup(html, 'html.parser')
-                ads = []
-                
-                for item in soup.select('[data-marker="item"]')[:limit]:
-                    try:
-                        title = item.select_one('[itemprop="name"]')
-                        price = item.select_one('[itemprop="price"]')
-                        link = item.select_one('a[href*="/"]')
-                        location = item.select_one('[class*="address"]')
-                        
-                        ads.append({
-                            'title': title.text.strip() if title else 'Без названия',
-                            'price': price.get('content', '0') if price else '0',
-                            'url': f"{self.BASE_URL}{link.get('href')}" if link else '',
-                            'location': location.text.strip() if location else ''
-                        })
-                    except:
-                        continue
-                return ads
+            try:
+                async with session.get(
+                    "https://www.avito.ru/rossiya",
+                    params=params,
+                    headers=headers,
+                    timeout=30
+                ) as response:
+                    if response.status != 200:
+                        return []
+                    
+                    html = await response.text()
+                    soup = BeautifulSoup(html, 'html.parser')
+                    ads = []
+                    
+                    for item in soup.select('[data-marker="item"]')[:limit]:
+                        try:
+                            title = item.select_one('[itemprop="name"]')
+                            price = item.select_one('[itemprop="price"]')
+                            link = item.select_one('a[href*="/"]')
+                            location = item.select_one('[class*="address"]')
+                            
+                            ads.append({
+                                'title': title.text.strip() if title else 'Без названия',
+                                'price': price.get('content', '0') if price else '0',
+                                'url': f"https://www.avito.ru{link.get('href')}" if link else '',
+                                'location': location.text.strip() if location else ''
+                            })
+                        except:
+                            continue
+                    return ads
+            except:
+                return []
 
 # ===================== КОМАНДЫ =====================
 
+async def send_typing_action(update: Update):
+    """Отправить действие 'печатает...'"""
+    try:
+        if update.message:
+            await update.message.chat.send_action(action='typing')
+        elif update.callback_query:
+            await update.callback_query.message.chat.send_action(action='typing')
+    except:
+        pass
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Старт"""
-    text = """
-🤖 **Avito Tiger Bot**
-
-🔍 **Мгновенный поиск:**
-/search iphone 13 - найти объявления
-
-📊 **Статистика Avito:**
-/stats iphone - график цен
-/trends - популярные запросы
-/diagram - диаграмма категорий
-
-📈 **Отчеты:**
-/daily - отчет за день
-/weekly - отчет за неделю
-
-🌐 **Веб-дашборд:**
-https://yus.github.io/avitotiger/
-"""
-    await update.message.reply_text(text, parse_mode='Markdown')
+    """Команда /start"""
+    await update.message.reply_text(
+        "🤖 **Avito Tiger Bot**\n\n"
+        "🔍 **Поиск объявлений:**\n"
+        "`/search iphone 13`\n\n"
+        "📊 **Статистика:**\n"
+        "`/stats iphone` - график цен\n"
+        "`/top` - популярные запросы\n\n"
+        "🌐 **Веб-дашборд:**\n"
+        "https://yus.github.io/avitotiger/",
+        parse_mode='Markdown'
+    )
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/search запрос - МГНОВЕННЫЙ ПОИСК"""
+    """Команда /search - поиск объявлений"""
+    
+    # Отправляем "печатает..."
+    await send_typing_action(update)
+    
+    # Проверяем аргументы
     if not context.args:
-        await update.message.reply_text("❌ Укажите запрос: /search iphone 13")
+        await update.message.reply_text(
+            "❌ **Укажите запрос!**\n\n"
+            "Пример: `/search iphone 13`",
+            parse_mode='Markdown'
+        )
         return
     
     query = ' '.join(context.args)
-    await update.message.chat.send_action(action='typing')
     
-    msg = await update.message.reply_text(f"🔍 Ищем: {query}...")
+    # Отправляем статус
+    status_msg = await update.message.reply_text(f"🔍 Ищем: {query}...")
     
+    # Парсим
     parser = AvitoParser()
     ads = await parser.search(query)
     
-    await msg.delete()
+    # Удаляем статус
+    await status_msg.delete()
     
     if not ads:
-        await update.message.reply_text(f"😕 Ничего не найдено по запросу: {query}")
+        await update.message.reply_text(
+            f"😕 По запросу **{query}** ничего не найдено",
+            parse_mode='Markdown'
+        )
         return
     
+    # Отправляем результаты
     for i, ad in enumerate(ads[:5], 1):
-        price = int(float(ad['price'])) if ad['price'].isdigit() else 0
-        if price >= 1000:
-            price_text = f"{price/1000:.0f} тыс ₽"
-        else:
-            price_text = f"{price} ₽"
+        try:
+            price = int(float(ad['price']))
+            if price >= 1000:
+                price_text = f"{price/1000:.0f} тыс ₽"
+            else:
+                price_text = f"{price} ₽"
+        except:
+            price_text = "Цена не указана"
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔗 Открыть", url=ad['url'])]
+            [InlineKeyboardButton("🔗 Открыть объявление", url=ad['url'])]
         ])
         
         text = f"📌 **{i}.** {ad['title'][:80]}\n💰 **{price_text}**"
         if ad['location']:
             text += f"\n📍 {ad['location']}"
         
-        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
+        await update.message.reply_text(
+            text,
+            parse_mode='Markdown',
+            reply_markup=keyboard,
+            disable_web_page_preview=False
+        )
         await asyncio.sleep(0.3)
 
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/stats запрос - график цен"""
-    if not context.args:
-        await update.message.reply_text("❌ Укажите товар: /stats iphone 13")
-        return
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка нажатий на кнопки"""
+    query = update.callback_query
+    await query.answer()
     
-    query = ' '.join(context.args)
-    
-    # Загружаем историю цен
-    prices_file = Path("data/prices.json")
-    if not prices_file.exists():
-        await update.message.reply_text("📊 Данных пока нет. Попробуйте позже.")
-        return
-    
-    with open(prices_file) as f:
-        data = json.load(f)
-    
-    if query not in data:
-        await update.message.reply_text(f"📊 Нет данных по запросу: {query}")
-        return
-    
-    # Генерируем диаграмму через GitHub Actions
-    await update.message.reply_text(
-        f"📊 Генерирую график цен для '{query}'...\n"
-        f"⏱ Это займет несколько секунд"
-    )
-    
-    # Запускаем workflow для генерации графика
-    await trigger_workflow('generate_chart.yml', {
-        'query': query,
-        'chat_id': update.effective_chat.id
-    })
-
-async def diagram_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/diagram - диаграмма категорий"""
-    # Ищем последнюю сгенерированную диаграмму
-    diagrams_dir = Path("data/diagrams")
-    if diagrams_dir.exists():
-        diagrams = list(diagrams_dir.glob("*.png"))
-        if diagrams:
-            latest = max(diagrams, key=lambda p: p.stat().st_mtime)
-            with open(latest, 'rb') as f:
-                await update.message.reply_photo(photo=f)
-            return
-    
-    await update.message.reply_text("📊 Генерирую диаграмму...")
-    await trigger_workflow('generate_diagram.yml', {
-        'chat_id': update.effective_chat.id
-    })
-
-async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/daily - отчет за день"""
-    report_file = Path("data/daily_report.json")
-    if report_file.exists():
-        with open(report_file) as f:
-            report = json.load(f)
-        
-        text = f"📊 **Отчет за {report['date']}**\n\n"
-        text += f"🔍 Всего поисков: {report['total_searches']}\n"
-        text += f"🆕 Новых объявлений: {report['new_ads']}\n"
-        text += f"💰 Средняя цена: {report['avg_price']} ₽\n\n"
-        text += f"🔥 **Топ-5 запросов:**\n"
-        
-        for i, (q, cnt) in enumerate(report['top_queries'][:5], 1):
-            text += f"{i}. {q} — {cnt} раз\n"
-        
-        await update.message.reply_text(text, parse_mode='Markdown')
-    else:
-        await update.message.reply_text("📊 Отчет еще не сгенерирован. Попробуйте позже.")
-
-async def trigger_workflow(workflow: str, payload: dict):
-    """Запуск GitHub Actions workflow"""
-    # Этот функционал добавим позже
-    pass
+    if query.data.startswith('search_'):
+        # Запускаем поиск из кнопки
+        search_term = query.data.replace('search_', '')
+        context.args = [search_term]
+        await search_command(update, context)
 
 # ===================== ЗАПУСК =====================
 
 def main():
+    """Запуск бота"""
     if not TOKEN:
-        print("❌ Нет токена!")
+        print("❌ TELEGRAM_BOT_TOKEN не установлен!")
         return
     
     app = Application.builder().token(TOKEN).build()
     
+    # Регистрируем команды
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("search", search_command))
-    app.add_handler(CommandHandler("stats", stats_command))
-    app.add_handler(CommandHandler("diagram", diagram_command))
-    app.add_handler(CommandHandler("daily", daily_command))
-    app.add_handler(CommandHandler("trends", stats_command))
-    app.add_handler(CommandHandler("weekly", daily_command))
+    app.add_handler(CallbackQueryHandler(button_callback))
     
-    print("🤖 Avito Tiger Bot started!")
-    app.run_polling()
+    print("🤖 Avito Tiger Bot запущен!")
+    print("✅ Команда /search работает")
+    
+    # Запускаем
+    app.run_polling(allowed_updates=['message', 'callback_query'])
 
 if __name__ == "__main__":
     main()
