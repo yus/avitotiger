@@ -18,6 +18,7 @@ jobs:
           service_name: avito-tiger-bot
           app_name: avito-tiger-bot
           service_type: worker
+          create_app: true
           build_command: pip install -r requirements.txt
           run_command: python src/bot.py
           ports: "8080:http"
