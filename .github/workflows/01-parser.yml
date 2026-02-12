@@ -5,7 +5,6 @@ on:
     - cron: '*/30 * * * *'
   workflow_dispatch:
 
-# ЭТО РЕШАЕТ ПРОБЛЕМУ КОНФЛИКТА!
 concurrency:
   group: avito-parser
   cancel-in-progress: true
@@ -15,32 +14,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install python-telegram-bot aiohttp beautifulsoup4 fake-useragent
       
-      # НЕ ЗАПУСКАЕМ bot.py, ОН ДЛЯ ПОЛЛИНГА!
-      # Запускаем отдельный cron-скрипт
-      - name: Run cron bot
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install python-telegram-bot==20.7 aiohttp==3.9.1 beautifulsoup4==4.12.2 fake-useragent==1.4.0
+      
+      - name: Run parser
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_IDS: ${{ secrets.TELEGRAM_ADMIN_IDS }}
+        run: python src/cron_bot.py
+      
+      - name: Commit and push data
         run: |
-          python -c "
-import os, asyncio
-from telegram import Bot
-from datetime import datetime
-
-async def ping():
-    bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
-    for admin_id in os.getenv('TELEGRAM_ADMIN_IDS', '').split(','):
-        if admin_id:
-            await bot.send_message(
-                chat_id=int(admin_id),
-                text=f'🕐 Парсер Avito запущен: {datetime.now().strftime(\"%H:%M:%S\")}'
-            )
-    print('✅ Уведомление отправлено')
-
-asyncio.run(ping())
-          "
+          git config --global user.name 'github-actions'
+          git config --global user.email 'actions@github.com'
+          git add data/
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update Avito data [skip ci]"
+          git push
