@@ -1,0 +1,45 @@
+name: 📩 Telegram Webhook Receiver
+
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        description: 'Telegram Chat ID'
+        required: true
+      query:
+        description: 'Search query'
+        required: true
+      message_id:
+        description: 'Optional: message ID to reply'
+        required: false
+
+jobs:
+  execute_search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install python-telegram-bot==20.7 aiohttp==3.9.1 beautifulsoup4==4.12.2 fake-useragent==1.4.0
+      
+      - name: Run Avito search
+        env:
+          QUERY: ${{ github.event.inputs.query }}
+          CHAT_ID: ${{ github.event.inputs.chat_id }}
+          MESSAGE_ID: ${{ github.event.inputs.message_id }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python src/webhook_search.py
+      
+      - name: Commit search results
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin main
+          git add data/searches/
+          git diff --quiet && git diff --staged --quiet || git commit -m "🔍 Search: ${{ github.event.inputs.query }} [skip ci]"
+          git push
