@@ -1,53 +1,46 @@
-name: Avito Tiger Bot
+name: 🕐 Avito Parser
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # Каждые 30 минут
-  workflow_dispatch:        # Ручной запуск
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+# ЭТО РЕШАЕТ ПРОБЛЕМУ КОНФЛИКТА!
+concurrency:
+  group: avito-parser
+  cancel-in-progress: true
 
 jobs:
-  check-avito:
+  parse:
     runs-on: ubuntu-latest
-    
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    - name: Install dependencies
-      run: |
-        pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    - name: Cache database
-      uses: actions/cache@v3
-      with:
-        path: data/
-        key: ${{ runner.os }}-db-${{ github.run_id }}
-        restore-keys: |
-          ${{ runner.os }}-db-
-    
-    - name: Run bot
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_ADMIN_IDS: ${{ secrets.TELEGRAM_ADMIN_IDS }}
-      run: python src/bot.py
-    
-    - name: Upload logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: bot-logs
-        path: logs/
-        retention-days: 7
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install python-telegram-bot aiohttp beautifulsoup4 fake-useragent
+      
+      # НЕ ЗАПУСКАЕМ bot.py, ОН ДЛЯ ПОЛЛИНГА!
+      # Запускаем отдельный cron-скрипт
+      - name: Run cron bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_IDS: ${{ secrets.TELEGRAM_ADMIN_IDS }}
+        run: |
+          python -c "
+import os, asyncio
+from telegram import Bot
+from datetime import datetime
+
+async def ping():
+    bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
+    for admin_id in os.getenv('TELEGRAM_ADMIN_IDS', '').split(','):
+        if admin_id:
+            await bot.send_message(
+                chat_id=int(admin_id),
+                text=f'🕐 Парсер Avito запущен: {datetime.now().strftime(\"%H:%M:%S\")}'
+            )
+    print('✅ Уведомление отправлено')
+
+asyncio.run(ping())
+          "
