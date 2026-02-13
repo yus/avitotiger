@@ -37,3 +37,8 @@ jobs:
           git add data/
           git diff --quiet && git diff --staged --quiet || git commit -m "Update Avito data [skip ci]"
           git push
+
+      - name: Process queued searches
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python src/search_processor.py
