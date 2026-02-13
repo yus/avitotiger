@@ -1,0 +1,42 @@
+# Add to 02-stats.yml or create 06-search-aggregator.yml
+name: 📊 Update Search Stats
+
+on:
+  push:
+    paths:
+      - 'data/searches/**'
+  workflow_dispatch:
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Generate latest searches index
+        run: |
+          # Find latest 50 searches
+          find data/searches -name "*.json" -type f -printf '%T@ %p\n' | \
+            sort -nr | head -50 | cut -d' ' -f2- > /tmp/latest_files.txt
+          
+          # Create latest.json
+          echo '[' > data/searches/latest.json
+          first=true
+          while read file; do
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo ',' >> data/searches/latest.json
+            fi
+            cat "$file" >> data/searches/latest.json
+          done < /tmp/latest_files.txt
+          echo ']' >> data/searches/latest.json
+      
+      - name: Commit search index
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'actions@github.com'
+          git add data/searches/latest.json
+          git diff --quiet && git diff --staged --quiet || \
+            git commit -m "📊 Update search index [skip ci]"
+          git push
