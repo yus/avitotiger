@@ -1,0 +1,128 @@
+name: 📊 Search History Aggregator
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # Every 10 minutes
+  workflow_dispatch:
+  push:
+    paths:
+      - 'data/searches/**/*.json'
+      - '!data/searches/latest.json'
+      - '!data/searches/stats.json'
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Generate search index and statistics
+        run: |
+          mkdir -p data/searches
+          
+          # ============ LATEST 50 SEARCHES ============
+          echo "🔍 Generating latest 50 searches..."
+          
+          # Find latest 50 JSON files (by filename timestamp)
+          find data/searches -name "*.json" -type f \
+            -not -path "*/latest.json" \
+            -not -path "*/stats.json" \
+            -printf '%f\n' | \
+            sort -r | \
+            head -50 | \
+            while read filename; do
+              find data/searches -name "$filename" -type f
+            done > /tmp/latest_paths.txt
+          
+          # Create latest.json array
+          echo '[' > data/searches/latest.json
+          first=true
+          while read file; do
+            if [ -f "$file" ]; then
+              if [ "$first" = true ]; then
+                first=false
+              else
+                echo ',' >> data/searches/latest.json
+              fi
+              cat "$file" >> data/searches/latest.json
+            fi
+          done < /tmp/latest_paths.txt
+          echo ']' >> data/searches/latest.json
+          
+          # ============ DAILY STATISTICS ============
+          echo "📊 Generating daily stats..."
+          
+          # Get today's date
+          TODAY=$(date +%Y-%m-%d)
+          TODAY_DIR="data/searches/$(date +%Y)/$(date +%m)/$(date +%d)"
+          
+          # Count today's searches
+          TODAY_COUNT=0
+          TODAY_QUERIES=""
+          if [ -d "$TODAY_DIR" ]; then
+            TODAY_COUNT=$(find "$TODAY_DIR" -name "*.json" -type f | wc -l)
+            TODAY_QUERIES=$(find "$TODAY_DIR" -name "*.json" -type f -exec cat {} \; | jq -r '.query' | sort | uniq -c | sort -nr | head -5)
+          fi
+          
+          # Get all-time stats
+          TOTAL_SEARCHES=$(find data/searches -name "*.json" -type f \
+            -not -path "*/latest.json" \
+            -not -path "*/stats.json" | wc -l)
+          
+          TOP_QUERIES=$(find data/searches -name "*.json" -type f \
+            -not -path "*/latest.json" \
+            -not -path "*/stats.json" \
+            -exec cat {} \; | jq -r '.query' | sort | uniq -c | sort -nr | head -10)
+          
+          # Calculate average price
+          AVG_PRICE=$(find data/searches -name "*.json" -type f \
+            -not -path "*/latest.json" \
+            -not -path "*/stats.json" \
+            -exec cat {} \; | jq -s 'map(.avg_price // 0) | add / length | floor' 2>/dev/null || echo 0)
+          
+          # Create stats.json
+          cat > data/searches/stats.json << EOF
+          {
+            "updated": "$(date -Iseconds)",
+            "today": {
+              "date": "$TODAY",
+              "searches": $TODAY_COUNT,
+              "top_queries": [
+          $(echo "$TODAY_QUERIES" | awk '{print "        {\"count\": "$1", \"query\": \""$2"\"}"}' | paste -sd, -)
+              ]
+            },
+            "all_time": {
+              "total_searches": $TOTAL_SEARCHES,
+              "average_price": $AVG_PRICE,
+              "top_queries": [
+          $(echo "$TOP_QUERIES" | awk '{print "        {\"count\": "$1", \"query\": \""$2"\"}"}' | head -5 | paste -sd, -)
+              ]
+            }
+          }
+          EOF
+          
+          # Pretty print JSON
+          cat data/searches/stats.json | jq '.' > data/searches/stats.tmp && mv data/searches/stats.tmp data/searches/stats.json
+          
+          echo "✅ Stats generated:"
+          echo "   - Latest searches: 50"
+          echo "   - Today searches: $TODAY_COUNT"
+          echo "   - Total searches: $TOTAL_SEARCHES"
+      
+      - name: Commit search statistics
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Pull latest changes
+          git pull --rebase origin main
+          
+          # Commit new stats files
+          git add data/searches/latest.json
+          git add data/searches/stats.json
+          
+          git diff --quiet && git diff --staged --quiet || \
+            git commit -m "📊 Update search stats [skip ci]"
+          git push
