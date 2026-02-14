@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avito Tiger - Дашборд</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐯 Avito Tiger Dashboard</h1>
+            <div class="last-update" id="updateTime"></div>
+        </header>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>🔍 Поисков сегодня</h3>
+                <div class="stat-number" id="totalSearches">...</div>
+            </div>
+            <div class="stat-card">
+                <h3>🆕 Новых объявлений</h3>
+                <div class="stat-number" id="newAds">...</div>
+            </div>
+            <div class="stat-card">
+                <h3>💰 Средняя цена</h3>
+                <div class="stat-number" id="avgPrice">...</div>
+            </div>
+            <div class="stat-card">
+                <h3>🔥 Топ запрос</h3>
+                <div class="stat-number" id="topQuery">...</div>
+            </div>
+            <!-- Add after existing stats sections -->
+            <div class="stats-card">
+                <h3>🔍 Сегодня</h3>
+                <div id="searches-today" class="stat-number">0</div>
+           </div>
+
+            <div class="stats-card">
+                <h3>🔥 Топ</h3>
+                <ul id="trending-searches">
+                    <li>Загрузка...</li>
+                </ul>
+            </div>
+
+            <script src="search_widget.js"></script>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h2>📈 Динамика цен</h2>
+                <img src="price_chart.png" alt="Price Chart" class="chart-image">
+            </div>
+            
+            <div class="chart-card">
+                <h2>🥧 Категории</h2>
+                <img src="category_pie.png" alt="Category Pie" class="chart-image">
+            </div>
+            
+            <div class="chart-card full-width">
+                <h2>📊 Тренды запросов</h2>
+                <img src="trends.png" alt="Trends" class="chart-image">
+            </div>
+        </div>
+        
+        <div class="search-section">
+            <h2>🔎 Поиск объявлений</h2>
+            <div class="search-box">
+                <input type="text" id="searchQuery" placeholder="iPhone 13, велосипед, диван...">
+                <button onclick="searchAvito()">Найти</button>
+            </div>
+            <div id="searchResults"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Обновление времени
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('updateTime').innerHTML = 
+                `🕐 Последнее обновление: ${now.toLocaleString('ru-RU')}`;
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Загрузка статистики
+        async function loadStats() {
+            try {
+                const response = await fetch('stats.json');
+                const stats = await response.json();
+                
+                document.getElementById('totalSearches').innerHTML = stats.totalSearches || '0';
+                document.getElementById('newAds').innerHTML = stats.newAds || '0';
+                document.getElementById('avgPrice').innerHTML = 
+                    stats.avgPrice ? `${stats.avgPrice.toLocaleString()} ₽` : '0 ₽';
+                document.getElementById('topQuery').innerHTML = stats.topQuery || '—';
+            } catch(e) {
+                console.log('Stats not ready yet');
+            }
+        }
+        loadStats();
+        
+        // Поиск через GitHub Actions
+        async function searchAvito() {
+            const query = document.getElementById('searchQuery').value;
+            if (!query) return;
+            
+            const results = document.getElementById('searchResults');
+            results.innerHTML = '<div class="loading">🔍 Ищем объявления...</div>';
+            
+            // Запускаем поиск через GitHub Actions
+            const response = await fetch(`https://api.github.com/repos/yus/avitotiger/dispatches`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({
+                    event_type: 'search_command',
+                    client_payload: {
+                        query: query,
+                        source: 'web'
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                results.innerHTML = '<div class="success">✅ Поиск запущен! Результаты появятся в Telegram</div>';
+            } else {
+                results.innerHTML = '<div class="error">❌ Ошибка запуска поиска</div>';
+            }
+        }
+    </script>
+</body>
+</html>
